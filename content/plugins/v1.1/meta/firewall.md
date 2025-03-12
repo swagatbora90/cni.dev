@@ -165,7 +165,7 @@ Starting with v1.1.0, the `firewall` plugin supports `ingressPolicy` for isolati
 }
 ```
 
-The supported values are `open` and `same-bridge`.
+The supported values are `open`, `same-bridge` and (starting with v1.7) `isolated`.
 
 - `open` is the default and does NOP.
 
@@ -199,3 +199,21 @@ with `bridge` plugin. May not work as expected with other "main" plugins.
 
 It should be also noted that the `same-bridge` ingress policy executes
 raw `iptables` commands directly, even when the `backend` is set to `firewalld`.
+
+- `isolated` behaves similar to ingress policy `same-bridge` with the exception
+that connections from the same bridge are also blocked.  This is meant to be
+functionally equivalent to Docker network option "enable_icc" when set to false.
+
+e.g., when `ns1` and `ns2` are two containers connected to the same bridge `cni1`,
+the `isolated` ingress policy disallows communications between `ns1` and `ns2`.
+
+```bash
+iptables -N CNI-ISOLATION-STAGE-1
+iptables -N CNI-ISOLATION-STAGE-2
+iptables -I FORWARD -j CNI-ISOLATION-STAGE-1
+iptables -A CNI-ISOLATION-STAGE-1 -i cni1 ! -o cni1 -j CNI-ISOLATION-STAGE-2
+iptables -A CNI-ISOLATION-STAGE-1 -i cni1 -o cni1 -j DROP
+iptables -A CNI-ISOLATION-STAGE-1 -j RETURN
+iptables -A CNI-ISOLATION-STAGE-2 -o cni1 -j DROP
+iptables -A CNI-ISOLATION-STAGE-2 -j RETURN
+```
